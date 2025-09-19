@@ -1,5 +1,6 @@
-// models/Monitor.ts
-import mongoose, { Schema, Document, models } from "mongoose";
+import mongoose from "mongoose";
+const { Schema, models, model } = mongoose;
+import type { Document } from "mongoose";
 
 export interface IMonitor extends Document {
   _id: mongoose.Types.ObjectId;

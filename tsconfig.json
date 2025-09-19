@@ -4,24 +4,43 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
+
+    /* emit compiled files */
+    "noEmit": false,
+    "outDir": "./dist",
+
+    /* strictness */
     "strict": true,
-    "noEmit": true,
     "esModuleInterop": true,
+
+    /* ESM setup */
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+
+    /* JSX for Next.js */
     "jsx": "preserve",
     "incremental": true,
+
+    /* critical for ESM imports */
+    "verbatimModuleSyntax": true,
+
     "plugins": [
       {
         "name": "next"
       }
     ],
+
     "paths": {
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

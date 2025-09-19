@@ -1,28 +1,32 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
 // worker/checker.ts
-const mongoose_1 = __importDefault(require("mongoose"));
-const perf_hooks_1 = require("perf_hooks");
-const got_1 = __importDefault(require("got"));
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
-const Monitor_1 = __importDefault(require("../models/Monitor"));
-const CheckResult_1 = __importDefault(require("../models/CheckResult"));
+import mongoose from "mongoose";
+import { performance } from "perf_hooks";
+import got from "got";
+import dotenv from "dotenv";
+dotenv.config();
+import Monitor, {} from "../models/Monitor.js";
+import CheckResult from "../models/CheckResult.js";
+import {} from "http";
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/uptime_monitor_service";
 const scheduled = new Map();
 const running = new Set();
 async function connectDB() {
-    if (mongoose_1.default.connection.readyState === 1)
+    if (mongoose.connection.readyState === 1)
         return;
-    await mongoose_1.default.connect(MONGODB_URI);
+    await mongoose.connect(MONGODB_URI);
     console.log("Connected to MongoDB for worker");
+}
+function normalizeHeaders(headers) {
+    const clean = {};
+    for (const [key, value] of Object.entries(headers)) {
+        if (value !== undefined)
+            clean[key] = value;
+    }
+    return clean;
 }
 /** Save check result + update monitor metadata */
 async function saveResult(monitorId, statusCode, up, responseTimeMs, error, headers) {
-    await CheckResult_1.default.create({
+    await CheckResult.create({
         monitorId,
         statusCode,
         up,
@@ -31,7 +35,7 @@ async function saveResult(monitorId, statusCode, up, responseTimeMs, error, head
         headers,
         timestamp: new Date(),
     });
-    await Monitor_1.default.findByIdAndUpdate(monitorId, {
+    await Monitor.findByIdAndUpdate(monitorId, {
         lastCheckedAt: new Date(),
         lastStatusCode: statusCode,
         lastUp: up,
@@ -39,6 +43,7 @@ async function saveResult(monitorId, statusCode, up, responseTimeMs, error, head
 }
 /** Actually perform a single check for monitorId */
 async function performCheck(monitorId) {
+    var _a;
     // prevent reentry
     if (running.has(monitorId)) {
         console.log(`[${monitorId}] check already running — skipping`);
@@ -46,52 +51,52 @@ async function performCheck(monitorId) {
     }
     running.add(monitorId);
     try {
-        const monitor = await Monitor_1.default.findById(monitorId).lean();
+        const monitor = await Monitor.findById(monitorId).lean();
         if (!monitor || !monitor.active) {
             running.delete(monitorId);
             return;
         }
-        const timeout = monitor.timeoutMs ?? 10000;
+        const timeout = (_a = monitor.timeoutMs) !== null && _a !== void 0 ? _a : 10000;
         const expected = monitor.expectedStatusCodes && monitor.expectedStatusCodes.length > 0
             ? new Set(monitor.expectedStatusCodes)
             : undefined;
-        const start = perf_hooks_1.performance.now();
+        const start = performance.now();
         try {
             // default HEAD
-            const res = await (0, got_1.default)(monitor.url, {
+            const res = await got(monitor.url, {
                 method: "HEAD",
                 throwHttpErrors: false,
                 timeout: { request: timeout },
                 followRedirect: true,
                 retry: { limit: 0 },
             });
-            const duration = Math.round(perf_hooks_1.performance.now() - start);
+            const duration = Math.round(performance.now() - start);
             let status = res.statusCode;
             let up = typeof status === "number" && (expected ? expected.has(status) : (status >= 200 && status < 400));
             // If HEAD is not allowed, fallback to GET
             if (status === 405 || status === 501) {
-                const start = perf_hooks_1.performance.now();
-                const res2 = await (0, got_1.default)(monitor.url, {
+                const start = performance.now();
+                const res2 = await got(monitor.url, {
                     method: "GET",
                     throwHttpErrors: false,
                     timeout: { request: timeout },
                     followRedirect: true,
                     retry: { limit: 0 },
                 });
-                const totalDuration = Math.round(perf_hooks_1.performance.now() - start);
+                const totalDuration = Math.round(performance.now() - start);
                 status = res2.statusCode;
                 up = (expected ? expected.has(status) : (status >= 200 && status < 400));
-                await saveResult(monitor._id, status, up, totalDuration, null, res2.headers);
+                await saveResult(monitor._id, status, up, totalDuration, null, normalizeHeaders(res2.headers));
                 console.log(`[${monitor.url}] GET fallback status=${status} up=${up} time=${totalDuration}ms`);
             }
             else {
-                await saveResult(monitor._id, status, up, duration, null, res.headers);
+                await saveResult(monitor._id, status, up, duration, null, normalizeHeaders(res.headers));
                 console.log(`[${monitor.url}] HEAD status=${status} up=${up} time=${duration}ms`);
             }
         }
         catch (err) {
-            const message = err instanceof Error ? err.message : "request error";
-            const duration = Math.round(perf_hooks_1.performance.now() - start);
+            const duration = Math.round(performance.now() - start);
+            const message = err instanceof Error ? err === null || err === void 0 ? void 0 : err.message : "request error";
             await saveResult(monitor._id, undefined, false, duration, message, {});
             console.log(`[${monitor.url}] ERROR ${message} time=${duration}ms`);
         }
@@ -129,7 +134,7 @@ function unscheduleMonitor(monitorId) {
 }
 /** Synchronize monitors from DB: add new schedules; remove deleted/inactive */
 async function syncMonitors() {
-    const monitors = await Monitor_1.default.find({ active: true });
+    const monitors = await Monitor.find({ active: true });
     const remoteIds = new Set(monitors.map((m) => m._id.toString()));
     // schedule new ones
     for (const m of monitors) {
@@ -143,7 +148,7 @@ async function syncMonitors() {
         }
     }
 }
-async function main() {
+export async function main() {
     await connectDB();
     await syncMonitors();
     // poll DB for new/removed monitors every 30 seconds

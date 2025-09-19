@@ -5,9 +5,9 @@ import got from "got";
 import dotenv from "dotenv";
 dotenv.config();
 
-import Monitor, { IMonitor } from "../models/Monitor";
-import CheckResult from "../models/CheckResult";
-
+import Monitor, {type IMonitor } from "../models/Monitor.js";
+import CheckResult from "../models/CheckResult.js";
+import { type IncomingHttpHeaders } from "http";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/uptime_monitor_service";
 
@@ -18,6 +18,14 @@ async function connectDB() {
   if (mongoose.connection.readyState === 1) return;
   await mongoose.connect(MONGODB_URI);
   console.log("Connected to MongoDB for worker");
+}
+
+function normalizeHeaders(headers: IncomingHttpHeaders): Record<string, string | string[]> {
+  const clean: Record<string, string | string[]> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value !== undefined) clean[key] = value;
+  }
+  return clean;
 }
 
 /** Save check result + update monitor metadata */
@@ -94,24 +102,16 @@ async function performCheck(monitorId: string) {
         const totalDuration = Math.round(performance.now() - start);
         status = res2.statusCode;
         up = (expected ? expected.has(status) : (status >= 200 && status < 400));
-        await saveResult(monitor._id as mongoose.Types.ObjectId, status, up, totalDuration, null, res2.headers as Record<string, string | string[]>);
+        await saveResult(monitor._id as mongoose.Types.ObjectId, status, up, totalDuration, null, normalizeHeaders(res2.headers));
         console.log(`[${monitor.url}] GET fallback status=${status} up=${up} time=${totalDuration}ms`);
       } else {
-        await saveResult(monitor._id as mongoose.Types.ObjectId, status, up, duration, null, res.headers as Record<string, string | string[]>);
+        await saveResult(monitor._id as mongoose.Types.ObjectId, status, up, duration, null, normalizeHeaders(res.headers));
         console.log(`[${monitor.url}] HEAD status=${status} up=${up} time=${duration}ms`);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "request error";
       const duration = Math.round(performance.now() - start);
-
-      await saveResult(
-        monitor._id as mongoose.Types.ObjectId,
-        undefined,
-        false,
-        duration,
-        message,
-        {}
-      );
+      const message = err instanceof Error ? err?.message :  "request error";
+      await saveResult(monitor._id as mongoose.Types.ObjectId, undefined, false, duration, message, {});
       console.log(`[${monitor.url}] ERROR ${message} time=${duration}ms`);
     }
   } finally {
@@ -151,12 +151,12 @@ function unscheduleMonitor(monitorId: string) {
 
 /** Synchronize monitors from DB: add new schedules; remove deleted/inactive */
 async function syncMonitors() {
-  const monitors:IMonitor[]= await Monitor.find({ active: true });
-  const remoteIds = new Set(monitors.map((m) => m._id.toString()));
+  const monitors = await Monitor.find({ active: true })
+  const remoteIds = new Set(monitors.map((m) => (m._id as mongoose.Types.ObjectId).toString()));
 
   // schedule new ones
   for (const m of monitors) {
-    if (!scheduled.has(m._id.toString())) scheduleMonitor(m);
+    if (!scheduled.has((m._id as mongoose.Types.ObjectId).toString())) scheduleMonitor(m);
   }
 
   // unschedule ones that should no longer be running
@@ -167,7 +167,7 @@ async function syncMonitors() {
   }
 }
 
-async function main() {
+export async function main() {
   await connectDB();
   await syncMonitors();
   // poll DB for new/removed monitors every 30 seconds
