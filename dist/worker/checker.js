@@ -1,13 +1,13 @@
 // worker/checker.ts
+import "dotenv/config";
 import mongoose from "mongoose";
 import { performance } from "perf_hooks";
 import got from "got";
-import dotenv from "dotenv";
-dotenv.config();
 import Monitor, {} from "../models/Monitor.js";
 import CheckResult from "../models/CheckResult.js";
 import {} from "http";
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/uptime_monitor_service";
+console.log(MONGODB_URI);
 const scheduled = new Map();
 const running = new Set();
 async function connectDB() {

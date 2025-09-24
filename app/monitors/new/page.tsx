@@ -5,6 +5,7 @@ import { useState } from "react";
 export default function NewMonitorPage() {
   const [urls, setUrls] = useState("");
   const [frequency, setFrequency] = useState(60);
+  const [checkType, setCheckType] = useState<"http_ping" | "full_page">("http_ping");
   const [message, setMessage] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -16,6 +17,7 @@ export default function NewMonitorPage() {
       body: JSON.stringify({
         urls: urls.split(",").map((u) => u.trim()),
         frequencySec: frequency,
+        checkType, 
       }),
     });
 
@@ -24,6 +26,7 @@ export default function NewMonitorPage() {
       setMessage("✅ Monitor(s) added successfully!");
       setUrls("");
       setFrequency(60);
+      setCheckType("http_ping");
     } else {
       setMessage("❌ " + data.error);
     }
@@ -47,6 +50,17 @@ export default function NewMonitorPage() {
           onChange={(e) => setFrequency(Number(e.target.value))}
           className="w-full border rounded p-2"
         />
+
+        {/* 👇 New dropdown for request type */}
+        <select
+          value={checkType}
+          onChange={(e) => setCheckType(e.target.value as "http_ping" | "full_page")}
+          className="w-full border rounded p-2"
+        >
+          <option value="http_ping">HEAD (fast check)</option>
+          <option value="full_page">GET (full page load, TTFB & total time)</option>
+        </select>
+
         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
           Save
         </button>
